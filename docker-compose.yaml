@@ -1,7 +1,7 @@
 services:
   kolokol_bot:
     build:
-      context: ../../bots/kolokol
+      context: ../../bots/kolokol_tgbot
       dockerfile: Dockerfile
 
     container_name: kolokol_work_bot

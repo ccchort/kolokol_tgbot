@@ -17,7 +17,7 @@ DB_CONFIG = {
 
 
 # Настройка подключения к базе данных
-protocol = "postgresql+psycopg2-binary"
+protocol = "postgresql+psycopg2"
 username = DB_CONFIG.get("user")  # 🔹 Логин от PostgreSQL
 password = DB_CONFIG.get("password")  # 🔹 Пароль от PostgreSQL
 server = DB_CONFIG.get("host")    # 🔹 Например, localhost или IP

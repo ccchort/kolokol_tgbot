@@ -16,7 +16,7 @@ async def add_balance(callback: CallbackQuery, state: FSMContext):
     user_id = int(callback.data.split(":")[1])
     await state.update_data(user_id=user_id)
     await callback.message.edit_text(
-        "<b>Кол-во баллов:</b> 💎",
+        "<b><b>Введите сумму покупки:</b> 💳",
         reply_markup=await IKB.admin_scan_cancel(user_id)
     )
 
@@ -25,14 +25,21 @@ async def add_user_balance(message: Message, state: FSMContext, db: DataBase):
     data = await state.get_data()
     user = await db.get_from_db(User, filters={"tg_id": data.get("user_id")})
     user = user[0]
-    
+    if 2100 <= int(message.text) < 5000:
+        bonus = int(message.text) * 0.05
+    elif int(message.text) >= 5000:
+        bonus = int(message.text) * 0.1
+    elif int(message.text) < 2100:
+        return
     await db.update_db(User, filters={"tg_id": data.get("user_id")},
-                     update_data={"balance": user.balance + float(message.text)})
+                     update_data={"balance": user.balance + int(bonus)})
     
     await db.add_to_db(Transaction(
         tg_id=data.get("user_id"),
         add_or_not=True,
-        transaction=int(message.text)
+        transaction=int(message.text),
+        created_at=datetime.now().replace(tzinfo=None),
+        expires_at=(datetime.now() + timedelta(days=90)).replace(tzinfo=None)
     ))
     
     await state.clear()
@@ -43,7 +50,7 @@ async def add_user_balance(message: Message, state: FSMContext, db: DataBase):
     
     await message.answer(
         f"<b>👤 @{user.username}</b>\n"
-        f"Баланс: <b>{user.balance + int(message.text)}</b> баллов\n\n"
+        f"Баланс: <b>{user.balance + int(bonus)}</b> баллов\n\n"
         f"<b>Действия:</b>",
         reply_markup=await IKB.admin_scan(user.tg_id)
     )
@@ -54,7 +61,7 @@ async def subtract_balance(callback: CallbackQuery, state: FSMContext):
     user_id = int(callback.data.split(":")[1])
     await state.update_data(user_id=user_id)
     await callback.message.edit_text(
-        "<b>Кол-во баллов:</b> 📉",
+        "<b>Введите сумму покупки:</b> 💳",
         reply_markup=await IKB.admin_scan_cancel(user_id)
     )
 
@@ -70,7 +77,8 @@ async def subtract_user_balance(message: Message, state: FSMContext, db: DataBas
     await db.add_to_db(Transaction(
         tg_id=data.get("user_id"),
         add_or_not=False,
-        transaction=int(message.text)
+        transaction=int(message.text),
+        created_at=datetime.now().replace(tzinfo=None),
     ))
     
     await state.clear()

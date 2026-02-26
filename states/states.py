@@ -14,6 +14,7 @@ class AdminStates(StatesGroup):
     waiting_for_target_broadcast_media_text = State()
 
 class AdminChangeBalance(StatesGroup):
+    waiting_subtractsum = State()
     waiting_addvalue = State()
     waiting_subtractvalue = State()
 

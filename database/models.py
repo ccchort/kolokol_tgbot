@@ -34,6 +34,8 @@ class Transaction(Base):
     tg_id = Column(BigInteger, nullable=False)
     add_or_not = Column(Boolean)
     transaction = Column(BigInteger)
+    created_at = Column(DateTime, default=datetime.now(timezone(timedelta(hours=4))))
+    expires_at = Column(DateTime)
 
 
 class Utm(Base):

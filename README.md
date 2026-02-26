@@ -65,12 +65,7 @@
 5. **Запустите PostgreSQL:**
    Убедитесь, что PostgreSQL запущен и доступен.
 
-6. **Создайте таблицы БД:**
-   ```bash
-   python database/create_tables.py
-   ```
-
-7. **Запустите бота:**
+6. **Запустите бота:**
    ```bash
    python main.py
    ```
@@ -80,11 +75,6 @@
 1. **Соберите образ:**
    ```bash
    docker compose up --build
-   ```
-
-2. **Запустите контейнеры:**
-   ```bash
-   docker-compose up -d
    ```
 
 ## Структура проекта
@@ -108,10 +98,10 @@ kolocol/
 │   │   └── transaction_history.py # История транзакций
 │   └── admin_handlers/   # Обработчики для админов
 │       ├── admin_mailng.py    # Рассылки
-│       ├── admin_utm.py       # UTM кампании
-│       ├── scan.py            # Сканирование QR
-│       ├── people_hendlers.py # Экспорт пользователей
-│       └── admin_remind.py    # Напоминания
+│       ├── admin_utm.py       # UTM метки
+│       ├── scan.py            # Функционал скана QR-кода
+│       ├── people_hendlers.py # Экспорт пользователей в Excel таблицу
+│       └── admin_remind.py    # Система напоминаний
 ├── keyboards/
 │   ├── IKB.py           # Inline клавиатуры
 │   └── RKB.py           # Reply клавиатуры
@@ -152,15 +142,6 @@ kolocol/
 ## Разработка
 
 Проект использует современные практики Python-разработки:
-- Type hints
 - Асинхронное программирование
 - Dependency injection через middleware
 - FSM для сложных сценариев
-
-## Контакты
-
-Гончарная мастерская "Колокол"
-- Адрес: г. Самара, Проспект Масленникова, 15
-- Телефон: +7 (919) 816-69-00
-- VK: https://vk.ru/kolokolschool_smr
-- Telegram: https://t.me/kolokolschool_smr

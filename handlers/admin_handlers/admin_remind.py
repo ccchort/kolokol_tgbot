@@ -5,13 +5,72 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from database.db import DataBase
-from database.models import Remind, User
+from database.models import Remind, User, Transaction
 from states.states import AdminAddRemind
 from keyboards.IKB import inlineKB as IKB
 
 remind = Router()
 
+async def check_points_expiration(bot, db):
+    """Проверяет транзакции на предмет истечения срока и отправляет напоминания"""
+    tz = pytz.timezone("Europe/Moscow")
+    now = datetime.now(tz).replace(tzinfo=None)
+
+    transactions = await db.get_from_db(Transaction, {"add_or_not": True, "expire": False})  # Получаем только те транзакции, которые добавляют баллы и еще не истекли
+
+    if not transactions:
+        return
+
+    for tr in transactions:
+
+        if not tr.expires_at:
+            continue
+
+        expires_at = tr.expires_at.replace(tzinfo=None)
+        days_left = (expires_at.date() - now.date()).days
+
+        if days_left == 30:
+            try:
+                await bot.send_message(
+                    tr.tg_id,
+                    "Твои баллы могут превратиться в пыль... <b>но лучше в керамику!</b> 🏺\n\n"
+                    "Напоминаем, что через 30 дней часть твоих бонусных баллов сгорит. Не дай вдохновению пропасть — используй их для создания нового шедевра или покупки уютного декора! ✨\n\n"
+                    "Ждем тебя за гончарным кругом, пока магия еще действует ⏳🌿"
+                )
+            except Exception as e:
+                print(f"Reminder error: {e}")
+
+        # День сгорания
+        if expires_at.date() <= now.date():
+            try:
+                user = await db.get_from_db(User, {"tg_id": tr.tg_id})
+
+                if not user:
+                    continue
+
+                user = user[0]
+
+                user.balance = max(
+                    0,
+                    user.balance - tr.transaction
+                )
+
+                await db.update_db(User, filters={"tg_id": tr.tg_id}, update_data={"balance": user.balance})
+
+                await bot.send_message(
+                    tr.tg_id,
+                    f"Время части бонусов подошло к концу... ⏳💨\n\n"
+                    f"Срок действия твоих старых баллов истек, и мы списали {tr.transaction} из них. \n\n"
+                    f"Но это не повод расстраиваться! Глина в мастерской всё такая же мягкая, а гончарный круг ждет твоих рук. Приходи творить и копи новые баллы для будущих шедевров! 🏺✨"
+                    )
+
+                await db.update_db(Transaction, filters={"id": tr.id}, update_data={"expire": True})
+
+            except Exception as e:
+                print(f"Expire error: {e}")
+
 async def check_reminders(bot, db):
+    """Проверяет базу напоминаний и отправляет пользователям, если время пришло"""
     now_moscow = datetime.now(pytz.timezone('Europe/Moscow')).replace(tzinfo=None)
     reminders = await db.get_from_db(Remind)
     

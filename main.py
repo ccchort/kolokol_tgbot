@@ -10,7 +10,7 @@ from handlers.admin_handlers.admin_utm import utm
 from handlers.user_handlers.cabinet import cab
 from handlers.admin_handlers.scan import scan
 from handlers.user_handlers.transaction_history import history
-from handlers.admin_handlers.admin_remind import remind, check_reminders
+from handlers.admin_handlers.admin_remind import remind, check_reminders, check_points_expiration
 from aiogram.client.default import DefaultBotProperties
 from handlers.admin_handlers.people_hendlers import excel
 from database import create_tables
@@ -43,6 +43,7 @@ async def main():
                        excel
                        )
     
+    scheduler.add_job(check_points_expiration, "interval", hours=24, args=(bot, db))
     # Добавляем задачу проверки каждую минуту
     scheduler.add_job(check_reminders, "interval", minutes=1, args=(bot, db))
     

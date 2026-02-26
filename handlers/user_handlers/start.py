@@ -1,3 +1,6 @@
+import dateparser
+import pytz
+from datetime import datetime, timedelta
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
 from aiogram.filters.command import CommandStart, CommandObject
@@ -8,6 +11,7 @@ from database.models import *
 from keyboards.RKB import replyKB as rkb
 from states.states import AddPhoneNumber
 from aiogram.utils.deep_linking import decode_payload
+from utils.month_texts import texts_for_months
 
 from config import config
 
@@ -33,8 +37,37 @@ async def scan_qr(message: Message, db: DataBase, command: CommandObject, state:
                 user = user[0]
                 await message.answer(f"Вы отсканировали QR-код пользователя @{user.username}!\nБаланс пользователя: {user.balance} баллов\n\nВыберите действие:", 
                                     reply_markup=await ikb.admin_scan(user.tg_id))
+                tz_moscow = pytz.timezone('Europe/Moscow')
+                now_in_moscow = datetime.now(tz_moscow)
+
+                parsed_date = dateparser.parse(
+                    "через 90 дней",
+                    languages=['ru'],
+                    settings={
+                        'PREFER_DATES_FROM': 'future',
+                        'RELATIVE_BASE': now_in_moscow.replace(tzinfo=None),
+                        'TIMEZONE': 'Europe/Moscow',
+                        'RETURN_AS_TIMEZONE_AWARE': False
+                    }
+                )
+
+                if not parsed_date:
+                    await message.answer(
+                        "<b>❌ Не распознал дату</b>\n\n"
+                        "Попробуй: 'завтра в 15:00'"
+                    )
+                    return
+
+                new_remind = Remind(
+                    tg_id=int(user.tg_id),
+                    text_remind=texts_for_months[parsed_date.month],
+                    date_remind=parsed_date
+                )
+                await db.add_to_db(new_remind)
                 
-        else:
+                await state.clear()
+
+        elif message.from_user.id not in config.admin_ids and payload.isdigit():
                 await message.answer("Я понимаю, интересно посмотреть закулисье, но поверь: там ничего интересного", 
                                     reply_markup=await ikb.start_kb())
 
@@ -63,9 +96,11 @@ async def scan_qr(message: Message, db: DataBase, command: CommandObject, state:
                     '<b>Что бы ты хотел сделать сегодня?</b> 🎨',
                     reply_markup=await ikb.start_kb()
                 )
+                return
                                 
             except (IndexError, ValueError):
                 pass
+    
         
             
     
@@ -97,16 +132,26 @@ async def add_user(message: Message, db: DataBase, state: FSMContext):
     await db.add_to_db(User(
         tg_id=message.from_user.id,
         username=message.from_user.username,
+        balance=200,
         phone=message.contact.phone_number,
         registration_date=datetime.now().replace(tzinfo=None),
         utm=data.get("utm", None)
     ))
+    await db.add_to_db(Transaction(
+        tg_id=message.from_user.id,
+        add_or_not=True,
+        transaction=200,
+        created_at=datetime.now().replace(tzinfo=None),
+        expires_at=datetime.now().replace(tzinfo=None) + timedelta(days=90)
+    ))
+    
     await state.clear()
     
     await message.answer(
-        "<b>Отлично! Регистрация завершена!</b> 🎉\n\n"
+        "Отлично! Регистрация завершена! 🎉\n\n"
         "Теперь ты официально творец в нашей мастерской! 🎨\n\n"
-        "Добро пожаловать в мир глины, вдохновения и уютных творческих вечеров! 💫",
+        "В честь нашего знакомства мы начислили тебе 200 приветственных баллов! Используй их, чтобы сделать свой первый шедевр еще приятнее. 🎁\n\n"
+        "Добро пожаловать в мир глины, вдохновения и уютных творческих вечеров! 💫🍯",
         reply_markup=ReplyKeyboardRemove(remove_keyboard=True)
     )
     

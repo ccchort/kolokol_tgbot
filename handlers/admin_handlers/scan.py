@@ -1,11 +1,11 @@
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from states.states import AdminChangeBalance, AdminWasEvent
 from keyboards.IKB import inlineKB as IKB
 from database.db import DataBase
 from database.models import *
-from datetime import datetime
+from datetime import datetime, timedelta
 
 scan = Router()
 
@@ -16,35 +16,35 @@ async def add_balance(callback: CallbackQuery, state: FSMContext):
     user_id = int(callback.data.split(":")[1])
     await state.update_data(user_id=user_id)
     await callback.message.edit_text(
-        "<b><b>Введите сумму покупки:</b> 💳",
+        "<b>Введите сумму покупки:</b> 💳",
         reply_markup=await IKB.admin_scan_cancel(user_id)
     )
 
 @scan.message(F.text.isdigit(), AdminChangeBalance.waiting_addvalue)
-async def add_user_balance(message: Message, state: FSMContext, db: DataBase):
+async def add_user_balance(message: Message, state: FSMContext, db: DataBase, bot: Bot):
     data = await state.get_data()
     user = await db.get_from_db(User, filters={"tg_id": data.get("user_id")})
     user = user[0]
-    if 2100 <= int(message.text) < 5000:
-        bonus = int(message.text) * 0.05
-    elif int(message.text) >= 5000:
-        bonus = int(message.text) * 0.1
-    elif int(message.text) < 2100:
-        return
-    await db.update_db(User, filters={"tg_id": data.get("user_id")},
-                     update_data={"balance": user.balance + int(bonus)})
-    
+    print(user.id, user.tg_id, user.username, user.balance)
+    if 2100 <= float(message.text) < 5000:
+        bonus = float(message.text) * 0.05
+    elif float(message.text) >= 5000:
+        bonus = float(message.text) * 0.1
+    elif float(message.text) < 2100:
+        bonus = float(message.text) * 0.03
+    await db.update_db(User, filters={"id": user.id},
+                     update_data={"balance": (user.balance + float(bonus))})
     await db.add_to_db(Transaction(
         tg_id=data.get("user_id"),
         add_or_not=True,
-        transaction=int(message.text),
+        transaction=float(bonus),
         created_at=datetime.now().replace(tzinfo=None),
         expires_at=(datetime.now() + timedelta(days=90)).replace(tzinfo=None)
     ))
     
     await state.clear()
     await message.answer(
-        f"<b>✅ +{message.text} баллов</b>\n"
+        f"<b>✅ +{bonus} баллов</b>\n"
         f"👤 @{user.username}"
     )
     
@@ -55,21 +55,73 @@ async def add_user_balance(message: Message, state: FSMContext, db: DataBase):
         reply_markup=await IKB.admin_scan(user.tg_id)
     )
 
+    await bot.send_message(
+        data.get("user_id"),
+        f"<b>Баланс пополнен! 🏺</b>\n"
+        f"<b>+{bonus} баллов за покупку.</b>\n"
+        f"Сейчас у вас {user.balance + int(bonus)} баллов. Используйте их, чтобы сделать следующую встречу с глиной еще приятнее 🙌✨"
+    )
+
 @scan.callback_query(F.data.startswith("subtract_balance:"))
-async def subtract_balance(callback: CallbackQuery, state: FSMContext):
-    await state.set_state(AdminChangeBalance.waiting_subtractvalue)
+async def subtract_balance(callback: CallbackQuery, state: FSMContext, db: DataBase):
     user_id = int(callback.data.split(":")[1])
+    user = await db.get_from_db(User, filters={"tg_id": user_id})
+    user = user[0]
+    if user.balance < 100:
+        await callback.answer(
+            f"❌ На счету пользователя недостаточно баллов для списания\n"
+            f"Баланс пользователя: {user.balance} баллов\n"
+            f"Минимальная сумма баллов для списания: 100 баллов",
+            show_alert=True
+        )
+        return
+    await state.set_state(AdminChangeBalance.waiting_subtractsum)
     await state.update_data(user_id=user_id)
     await callback.message.edit_text(
         "<b>Введите сумму покупки:</b> 💳",
         reply_markup=await IKB.admin_scan_cancel(user_id)
     )
 
+@scan.message(F.text.isdigit(), AdminChangeBalance.waiting_subtractsum)
+async def subtract_user_balance(message: Message, state: FSMContext):
+    await state.update_data(subtractsum=int(message.text))
+    await state.set_state(AdminChangeBalance.waiting_subtractvalue)
+    max_bonus = float(message.text) / 100 * 20
+    if max_bonus < 100:
+        await message.answer(
+            f"❌ Слишком маленькая сумма покупки для списания баллов\n"
+        )
+        await state.clear()
+        return
+    await message.answer(
+        f"<b>Минимальная сумма баллов для списания:</b> <b>100</b> баллов\n"
+        f"<b>Максимальная сумма баллов для списания:</b> <b>{max_bonus}</b> баллов\n"
+        f"<b>💳 Введите сумму баллов для списания:</b>",
+        reply_markup=await IKB.admin_scan_cancel((await state.get_data()).get("user_id"))
+    )
+
 @scan.message(F.text.isdigit(), AdminChangeBalance.waiting_subtractvalue)
-async def subtract_user_balance(message: Message, state: FSMContext, db: DataBase):
+async def subtract_user_balance(message: Message, state: FSMContext, db: DataBase, bot: Bot):
     data = await state.get_data()
     user = await db.get_from_db(User, filters={"tg_id": data.get("user_id")})
     user = user[0]
+    if float(message.text) > user.balance:
+        await message.answer(
+            f"<b>❌ Недостаточно баллов на счету пользователя</b>\n"
+            f"Баланс пользователя: <b>{user.balance}</b> баллов\n"
+            f"<b>💳Введите сумму баллов для списания:</b> ",
+            reply_markup=await IKB.admin_scan_cancel((await state.get_data()).get("user_id"))
+        )
+        return
+    if float(message.text) < 100 or float(message.text) > data.get("subtractsum") / 100 * 20:
+        await message.answer(
+            f"<b>❌ Некорректная сумма баллов для списания</b>\n"
+            f"<b>Минимальная сумма баллов для списания:</b> <b>100</b> баллов\n"
+            f"<b>Максимальная сумма баллов для списания:</b> <b>{data.get('subtractsum') / 100 * 20}</b> баллов\n"
+            f"<b>Введите сумму баллов для списания:</b> 💳",
+            reply_markup=await IKB.admin_scan_cancel((await state.get_data()).get("user_id"))
+        )
+        return
     
     await db.update_db(User, filters={"tg_id": data.get("user_id")},
                      update_data={"balance": user.balance - float(message.text)})
@@ -92,6 +144,13 @@ async def subtract_user_balance(message: Message, state: FSMContext, db: DataBas
         f"Баланс: <b>{user.balance - int(message.text)}</b> баллов\n\n"
         f"<b>Действия:</b>",
         reply_markup=await IKB.admin_scan(user.tg_id)
+    )
+
+    await bot.send_message(
+        data.get("user_id"),
+        f"<b>Магия вне хогвартса: цена стала меньше! 🪄</b>\n"
+        f"Вы использовали {int(message.text)} баллов для оплаты заказа.\n"
+        f"На счету осталось {user.balance - int(message.text)} баллов — самое время запланировать следующий поход за гончарный круг!"
     )
 
 @scan.callback_query(F.data.startswith("was_event:"))
